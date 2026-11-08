@@ -1,373 +1,387 @@
 ﻿ 
-Random random = new Random();
+using System;
 
-Console.WriteLine("========================================");
-Console.WriteLine("       ПОДЗЕМЕЛЬЕ: ПУТЬ ГЕРОЯ");
-Console.WriteLine("========================================");
-Console.Write("Введите имя персонажа: ");
-string name = Console.ReadLine();
-
-int classChoice;
-do
+enum RoomType
 {
-    Console.WriteLine();
-    Console.WriteLine("=== ВЫБОР КЛАССА ===");
-    Console.WriteLine("1 — Воин");
-    Console.WriteLine("2 — Маг");
-    Console.WriteLine("3 — Разбойник");
-    Console.Write("Ваш выбор: ");
-
-    string input = Console.ReadLine();
-
-    if (!int.TryParse(input, out classChoice))
-    {
-        classChoice = 0;
-        Console.WriteLine("Ошибка. Введите число от 1 до 3.");
-    }
-    else if (classChoice < 1 || classChoice > 3)
-    {
-        Console.WriteLine("Ошибка. Такого класса нет.");
-    }
-
-} while (classChoice < 1 || classChoice > 3);
-
-int health = 0;
-int maxHealth = 0;
-int attack = 0;
-int defense = 0;
-int potions = 0;
-bool isAlive = true;
-
-string clas;
-switch (classChoice)
-{
-    case 1:
-        clas = "Воин";
-        health = 120;
-        maxHealth = 120;
-        attack = 18;
-        defense = 10;
-        potions = 3;
-        break;
-    case 2:
-        clas = "Маг";
-        health = 80;
-        maxHealth = 80;
-        attack = 25;
-        defense = 4;
-        potions = 5;
-        break;
-    case 3:
-        clas = "Разбойник";
-        health = 100;
-        maxHealth = 100;
-        attack = 21;
-        defense = 6;
-        potions = 3;
-        break;
-    default:
-        clas = "Неизвестный класс";
-        break;
+    Empty,
+    Enemy,
+    StrongEnemy,
+    Trap,
+    Treasure,
+    Rest,
+    Merchant
 }
 
-Console.WriteLine("============================");
-Console.WriteLine("    Созданный персонаж");
-Console.WriteLine("============================");
-Console.WriteLine();
-Console.WriteLine($"Имя = {name}");
-Console.WriteLine($"Класс = {clas}");
-Console.WriteLine();
-Console.WriteLine("-----Характеристики-----");
-Console.WriteLine($"Здоровье = {health}/{maxHealth}");
-Console.WriteLine($"Атака = {attack}");
-Console.WriteLine($"Защита = {defense}");
-Console.WriteLine($"Зелья = {potions}");
-
-int difficulty;
-do
+class Program
 {
-    Console.WriteLine();
-    Console.WriteLine("Выберите сложность подземелья:");
-    Console.WriteLine("1 — Лёгкий");
-    Console.WriteLine("2 — Обычный");
-    Console.WriteLine("3 — Сложный");
-    Console.Write("Ваш выбор: ");
+    static Random random = new Random();
 
-    string input = Console.ReadLine();
-
-    if (!int.TryParse(input, out difficulty))
+    // ============================================================
+    //                    ТОЧКА ВХОДА
+    // ============================================================
+    static void Main()
     {
-        difficulty = 0;
-        Console.WriteLine("Введите число от 1 до 3.");
+        ShowTitle();
+
+        CreateCharacter(out string name, out string clas,
+                        out int health, out int maxHealth,
+                        out int attack, out int defense,
+                        out int potions);
+
+        double enemyMultiplier = SelectDifficulty();
+
+        int potionsUsed = 0;
+        int damageDealt = 0;
+        int damageTaken = 0;
+        int defeatedEnemies = 0;
+
+        bool isAlive = RunDungeon(name,
+                                  ref health, maxHealth,
+                                  attack, defense,
+                                  ref potions, ref potionsUsed,
+                                  ref damageDealt, ref damageTaken,
+                                  ref defeatedEnemies,
+                                  enemyMultiplier,
+                                  out int roomsPassed);
+
+        bool leftDungeon = isAlive;
+
+        ShowStatistics(roomsPassed, defeatedEnemies, potionsUsed, damageDealt, damageTaken);
+        FinishGame(isAlive, leftDungeon);
     }
-    else if (difficulty < 1 || difficulty > 3)
+
+    // ============================================================
+    //                    ОБЩИЕ МЕТОДЫ
+    // ============================================================
+    static void ShowTitle()
     {
-        Console.WriteLine("Такого уровня сложности нет.");
+        Console.WriteLine("========================================");
+        Console.WriteLine("       ПОДЗЕМЕЛЬЕ: ПУТЬ ГЕРОЯ");
+        Console.WriteLine("========================================");
     }
-} while (difficulty < 1 || difficulty > 3);
 
-double enemyMultiplier = 1.0;
-
-if (difficulty == 1)
-{
-    enemyMultiplier = 0.8;
-    Console.WriteLine("Вы выбрали лёгкую сложность.");
-}
-else if (difficulty == 2)
-{
-    enemyMultiplier = 1.0;
-    Console.WriteLine("Вы выбрали обычную сложность.");
-}
-else
-{
-    enemyMultiplier = 1.3;
-    Console.WriteLine("Вы выбрали сложную сложность.");
-}
-
-// Статистика
-int roomsPassed = 0;
-int defeatedEnemies = 0;
-int potionsUsed = 0;
-int damageDealt = 0;
-int damageTaken = 0;
-bool leftDungeon = false;
-
-// Исследование пяти комнат
-for (int room = 1; room <= 5 && isAlive && !leftDungeon; room++)
-{
-    Console.WriteLine();
-    Console.WriteLine("========================================");
-    Console.WriteLine($"КОМНАТА {room} ИЗ 5");
-    Console.WriteLine("========================================");
-
-    int choice;
-    do
+    // Безопасный ввод целого числа в диапазоне [min, max]
+    static int ReadIntInRange(int min, int max, string prompt)
     {
-        Console.WriteLine();
-        Console.WriteLine($"Вы исследуете комнату {room}.");
-        Console.WriteLine("1 — Продолжить");
-        Console.WriteLine("2 — Покинуть подземелье");
-        Console.Write("Ваш выбор: ");
-
-        string input = Console.ReadLine();
-
-        if (!int.TryParse(input, out choice))
-        {
-            choice = 0;
-            Console.WriteLine("Введите число 1 или 2.");
-        }
-        else if (choice < 1 || choice > 2)
-        {
-            Console.WriteLine("Такого действия нет.");
-        }
-
-    } while (choice < 1 || choice > 2);
-
-    if (choice == 2)
-    {
-        leftDungeon = true;
-        Console.WriteLine("Вы покинули подземелье.");
-        break;
-    }
-    roomsPassed++;
-
-    Console.WriteLine("Вы открываете дверь...");
-    int eventType = random.Next(1, 6);
-
-    if (eventType == 1 || eventType == 2)
-    {
-        string enemyName;
-        int enemyBaseHealth;
-        int enemyBaseAttack;
-
-        // Выбираем один из трeх типов врагов
-        int enemyType = random.Next(1, 4);
-
-        if (enemyType == 1)
-        {
-            enemyName = "Гоблин";
-            enemyBaseHealth = 40;
-            enemyBaseAttack = 8;
-        }
-        else if (enemyType == 2)
-        {
-            enemyName = "Орк";
-            enemyBaseHealth = 70;
-            enemyBaseAttack = 12;
-        }
-        else
-        {
-            enemyName = "Рыцарь";
-            enemyBaseHealth = 100;
-            enemyBaseAttack = 16;
-        }
-
-        int enemyHealth = (int)Math.Round(enemyBaseHealth * enemyMultiplier);
-        int enemyAttack = (int)Math.Round(enemyBaseAttack * enemyMultiplier);
-
-        // Событие 2 более опасный противник
-        if (eventType == 2)
-        {
-            enemyHealth = (int)Math.Round(enemyHealth * 1.25);
-            enemyAttack = (int)Math.Round(enemyAttack * 1.25);
-            Console.WriteLine("Это сильный противник!");
-        }
-
-        Console.WriteLine($"На вас напал: {enemyName}!");
-        Console.WriteLine($"Здоровье врага: {enemyHealth}");
-        Console.WriteLine($"Атака врага: {enemyAttack}");
-
-        bool hasEscaped = false;
-
-        //Цикл боя
-        while (isAlive && enemyHealth > 0 && !hasEscaped)
+        while (true)
         {
             Console.WriteLine();
-            Console.WriteLine($"Ваше здоровье: {health} / {maxHealth}");
-            Console.WriteLine($"{enemyName}: {enemyHealth} HP");
-            Console.WriteLine($"Зелий: {potions}");
+            Console.Write(prompt);
 
-            int action;
-            do
+            string input = Console.ReadLine();
+
+            if (!int.TryParse(input, out int value))
             {
-                Console.WriteLine();
-                Console.WriteLine("1 — Атаковать");
-                Console.WriteLine("2 — Использовать зелье");
-                Console.WriteLine("3 — Защищаться");
-                Console.Write("Ваш выбор: ");
-
-                string input = Console.ReadLine();
-
-                if (!int.TryParse(input, out action))
-                {
-                    action = 0;
-                    Console.WriteLine("Введите число от 1 до 3.");
-                }
-                else if (action < 1 || action > 3)
-                {
-                    Console.WriteLine("Такого действия нет.");
-                }
-
-            } while (action < 1 || action > 3);
-
-            bool isDefending = true;
-            switch (action)
-            {
-                case 1:
-                    int actualDamage = attack;
-
-                    // Критический удар: вероятность 20%
-                    bool isCritical = random.Next(1, 101) <= 20;
-                    if (isCritical)
-                    {
-                        actualDamage *= 2;
-                        Console.WriteLine("КРИТИЧЕСКИЙ УДАР!");
-                    }
-
-                    // Не засчитываем лишний урон сверх здоровья врага
-                    if (actualDamage > enemyHealth)
-                    {
-                        actualDamage = enemyHealth;
-                    }
-
-                    enemyHealth -= actualDamage;
-                    damageDealt += actualDamage;
-                    Console.WriteLine($"Вы наносите {actualDamage} урона!");
-
-                    if (enemyHealth == 0)
-                    {
-                        Console.WriteLine($"{enemyName} повержен!");
-                    }
-                    break;
-
-                case 2:
-                    if (potions <= 0)
-                    {
-                        Console.WriteLine("У вас нет зелий!");
-                    }
-                    else if (health >= maxHealth)
-                    {
-                        Console.WriteLine("Здоровье уже максимальное!");
-                    }
-                    else
-                    {
-                        health += 30;
-
-                        if (health > maxHealth)
-                        {
-                            health = maxHealth;
-                        }
-
-                        potions--;
-                        potionsUsed++;
-
-                        Console.WriteLine("Вы использовали зелье!");
-                        Console.WriteLine($"Здоровье: {health} / {maxHealth}");
-                    }
-
-                    break;
-
-                case 3:
-                    isDefending = true;
-                    Console.WriteLine("Вы приготовились защищаться!");
-                    break;
-                
-                case 4:
-                    hasEscaped = true;
-                    Console.WriteLine("Вы сбежали от противника.");
-                    break;
+                Console.WriteLine($"Ошибка. Введите число от {min} до {max}.");
+                continue;
             }
-            // Враг отвечает, если он жив и игрок не сбежал
-            if (enemyHealth > 0 && !hasEscaped)
+
+            if (value < min || value > max)
             {
-                int rawDamage = enemyAttack - defense;
-                if (rawDamage < 1)
-                {
-                    rawDamage = 1;
-                }
-
-                if (isDefending)
-                {
-                    rawDamage = Math.Max(1, rawDamage / 2);
-                    Console.WriteLine("Защита уменьшила полученный урон!");
-                }
-
-                damageTaken += rawDamage;
-                health -= rawDamage;
-
-                if (health < 0)
-                {
-                    health = 0;
-                }
-
-                Console.WriteLine($"{enemyName} атакует! Вы получаете {rawDamage} урона.");
-                Console.WriteLine($"Ваше здоровье: {health}/{maxHealth}");
-
-                if (health == 0)
-                {
-                    isAlive = false;
-                    Console.WriteLine("Ваш персонаж погиб!");
-                }
+                Console.WriteLine($"Ошибка. Введите число от {min} до {max}.");
+                continue;
             }
-        }
 
-        if (enemyHealth <= 0)
-        {
-            defeatedEnemies++;
-        }
-
-        if (isAlive && enemyHealth <= 0)
-        {
-            Console.WriteLine("Бой окончен. Вы продолжаете путь.");
+            return value;
         }
     }
-    else if (eventType == 3)
+
+    // ============================================================
+    //                    СОЗДАНИЕ ПЕРСОНАЖА
+    // ============================================================
+    static void CreateCharacter(out string name, out string clas,
+                                out int health, out int maxHealth,
+                                out int attack, out int defense,
+                                out int potions)
     {
-        Console.WriteLine("Вы нашли зелье!");
-        potions++;
-        Console.WriteLine($"Теперь у вас зелий: {potions}");
+        Console.Write("Введите имя персонажа: ");
+        name = Console.ReadLine();
+
+        int classChoice = ReadIntInRange(1, 3,
+            "=== ВЫБОР КЛАССА ===\n" +
+            "1 — Воин\n" +
+            "2 — Маг\n" +
+            "3 — Разбойник\n" +
+            "Ваш выбор: ");
+
+        switch (classChoice)
+        {
+            case 1:
+                clas = "Воин";
+                health = 120; maxHealth = 120;
+                attack = 18; defense = 10; potions = 3;
+                break;
+            case 2:
+                clas = "Маг";
+                health = 80; maxHealth = 80;
+                attack = 25; defense = 4; potions = 5;
+                break;
+            default:
+                clas = "Разбойник";
+                health = 100; maxHealth = 100;
+                attack = 21; defense = 6; potions = 3;
+                break;
+        }
+
+        ShowCharacter(name, clas, health, maxHealth, attack, defense, potions);
     }
-    else if (eventType == 4)
+
+    static void ShowCharacter(string name, string clas,
+                              int health, int maxHealth,
+                              int attack, int defense, int potions)
+    {
+        Console.WriteLine();
+        Console.WriteLine("============================");
+        Console.WriteLine("    Созданный персонаж");
+        Console.WriteLine("============================");
+        Console.WriteLine();
+        Console.WriteLine($"Имя = {name}");
+        Console.WriteLine($"Класс = {clas}");
+        Console.WriteLine();
+        Console.WriteLine("-----Характеристики-----");
+        Console.WriteLine($"Здоровье = {health}/{maxHealth}");
+        Console.WriteLine($"Атака = {attack}");
+        Console.WriteLine($"Защита = {defense}");
+        Console.WriteLine($"Зелья = {potions}");
+    }
+
+    static double SelectDifficulty()
+    {
+        int difficulty = ReadIntInRange(1, 3,
+            "Выберите сложность подземелья:\n" +
+            "1 — Лёгкий\n" +
+            "2 — Обычный\n" +
+            "3 — Сложный\n" +
+            "Ваш выбор: ");
+
+        if (difficulty == 1)
+        {
+            Console.WriteLine("Вы выбрали лёгкую сложность.");
+            return 0.8;
+        }
+        if (difficulty == 2)
+        {
+            Console.WriteLine("Вы выбрали обычную сложность.");
+            return 1.0;
+        }
+
+        Console.WriteLine("Вы выбрали сложную сложность.");
+        return 1.3;
+    }
+
+    // ============================================================
+    //                    ИГРОВЫЕ ФОРМУЛЫ
+    // ============================================================
+    static int CalculateDamage(int attack, int defense)
+    {
+        int damage = attack - defense;
+        return damage < 1 ? 1 : damage;
+    }
+
+    static int RestoreHealth(int health, int maxHealth, int amount)
+    {
+        int newHealth = health + amount;
+        return newHealth > maxHealth ? maxHealth : newHealth;
+    }
+
+    // ============================================================
+    //                    ПРОХОЖДЕНИЕ ПОДЗЕМЕЛЬЯ
+    // ============================================================
+    static RoomType GenerateRoom()
+    {
+        int r = random.Next(1, 101);
+
+        if (r <= 20) return RoomType.Empty;
+        if (r <= 45) return RoomType.Enemy;
+        if (r <= 60) return RoomType.StrongEnemy;
+        if (r <= 75) return RoomType.Trap;
+        if (r <= 87) return RoomType.Treasure;
+        if (r <= 95) return RoomType.Rest;
+        return RoomType.Merchant;
+    }
+
+    // Возвращает true, если игрок жив (победил или вышел), false - если погиб
+    static bool RunDungeon(string playerName,
+                           ref int health, int maxHealth,
+                           int attack, int defense,
+                           ref int potions, ref int potionsUsed,
+                           ref int damageDealt, ref int damageTaken,
+                           ref int defeatedEnemies,
+                           double enemyMultiplier,
+                           out int roomsPassed)
+    {
+        roomsPassed = 0;
+        int attackBonus = 0;
+
+        for (int room = 1; room <= 5; room++)
+        {
+            Console.WriteLine();
+            Console.WriteLine("========================================");
+            Console.WriteLine($"КОМНАТА {room} ИЗ 5");
+            Console.WriteLine("========================================");
+
+            int choice = ReadIntInRange(1, 2,
+                "1 — Продолжить\n" +
+                "2 — Покинуть подземелье\n" +
+                "Ваш выбор: ");
+
+            if (choice == 2)
+            {
+                Console.WriteLine("Вы покинули подземелье.");
+                return true;
+            }
+
+            roomsPassed++;
+
+            RoomType roomType = GenerateRoom();
+            Console.WriteLine("Вы открываете дверь...");
+
+            bool alive = ProcessRoom(roomType, playerName,
+                                     ref health, maxHealth,
+                                     attack, defense,
+                                     ref potions, ref potionsUsed,
+                                     ref damageDealt, ref damageTaken,
+                                     ref defeatedEnemies,
+                                     ref attackBonus,
+                                     enemyMultiplier);
+
+            if (!alive)
+                return false;
+        }
+
+        // Финальный босс
+        Console.WriteLine();
+        Console.WriteLine("========================================");
+        Console.WriteLine("             ФИНАЛЬНЫЙ БОСС");
+        Console.WriteLine("========================================");
+        Console.WriteLine("В глубине подземелья появляется Хранитель Тьмы!");
+
+        int bossHealth = (int)Math.Round(150 * enemyMultiplier);
+        int bossAttack = (int)Math.Round(20 * enemyMultiplier);
+        int totalAttack = attack + attackBonus;
+
+        bool won = StartBattle(playerName, totalAttack, defense,
+                               ref health, maxHealth,
+                               ref potions, ref potionsUsed,
+                               ref damageDealt, ref damageTaken,
+                               "Хранитель Тьмы", bossHealth, bossAttack);
+
+        if (won && health > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("========================================");
+            Console.WriteLine("                ПОБЕДА!");
+            Console.WriteLine("========================================");
+            Console.WriteLine("Вы победили Хранителя Тьмы");
+            Console.WriteLine("и выбрались из подземелья.");
+            Console.WriteLine("Поздравляем!");
+            return true;
+        }
+
+        return false;
+    }
+
+    // Возвращает false, если игрок погиб
+    static bool ProcessRoom(RoomType roomType, string playerName,
+                            ref int health, int maxHealth,
+                            int attack, int defense,
+                            ref int potions, ref int potionsUsed,
+                            ref int damageDealt, ref int damageTaken,
+                            ref int defeatedEnemies,
+                            ref int attackBonus,
+                            double enemyMultiplier)
+    {
+        switch (roomType)
+        {
+            case RoomType.Empty:
+                Console.WriteLine("Комната пуста. Можно идти дальше.");
+                return true;
+
+            case RoomType.Enemy:
+            case RoomType.StrongEnemy:
+            {
+                string enemyName;
+                int enemyBaseHealth;
+                int enemyBaseAttack;
+
+                int enemyType = random.Next(1, 4);
+                if (enemyType == 1)
+                {
+                    enemyName = "Гоблин";
+                    enemyBaseHealth = 40;
+                    enemyBaseAttack = 8;
+                }
+                else if (enemyType == 2)
+                {
+                    enemyName = "Орк";
+                    enemyBaseHealth = 70;
+                    enemyBaseAttack = 12;
+                }
+                else
+                {
+                    enemyName = "Рыцарь";
+                    enemyBaseHealth = 100;
+                    enemyBaseAttack = 16;
+                }
+
+                int enemyHealth = (int)Math.Round(enemyBaseHealth * enemyMultiplier);
+                int enemyAttack = (int)Math.Round(enemyBaseAttack * enemyMultiplier);
+
+                if (roomType == RoomType.StrongEnemy)
+                {
+                    enemyHealth = (int)Math.Round(enemyHealth * 1.25);
+                    enemyAttack = (int)Math.Round(enemyAttack * 1.25);
+                    Console.WriteLine("Это сильный противник!");
+                }
+
+                Console.WriteLine($"На вас напал: {enemyName}!");
+                Console.WriteLine($"Здоровье врага: {enemyHealth}");
+                Console.WriteLine($"Атака врага: {enemyAttack}");
+
+                int totalAttack = attack + attackBonus;
+                bool won = StartBattle(playerName, totalAttack, defense,
+                                       ref health, maxHealth,
+                                       ref potions, ref potionsUsed,
+                                       ref damageDealt, ref damageTaken,
+                                       enemyName, enemyHealth, enemyAttack);
+
+                if (won && health > 0)
+                {
+                    defeatedEnemies++;
+                    Console.WriteLine("Бой окончен. Вы продолжаете путь.");
+                }
+
+                return health > 0;
+            }
+
+            case RoomType.Trap:
+            {
+                bool alive = true;
+                ProcessTrap(ref health, maxHealth, ref damageTaken, ref alive);
+                return alive;
+            }
+
+            case RoomType.Treasure:
+                ProcessTreasure(ref potions, ref attackBonus);
+                return true;
+
+            case RoomType.Rest:
+                ProcessRest(ref health, maxHealth);
+                return true;
+
+            case RoomType.Merchant:
+                ProcessMerchant(ref potions, ref attackBonus);
+                return true;
+        }
+
+        return true;
+    }
+
+    // ============================================================
+    //                    ОБРАБОТКА КОМНАТ
+    // ============================================================
+    static void ProcessTrap(ref int health, int maxHealth,
+                            ref int damageTaken, ref bool isAlive)
     {
         Console.WriteLine("Вы попали в ловушку!");
         int trapDamage = 15;
@@ -383,102 +397,147 @@ for (int room = 1; room <= 5 && isAlive && !leftDungeon; room++)
         else
         {
             Console.WriteLine($"Получено {trapDamage} урона.");
-            Console.WriteLine($"Ваше здоровье: {health} / {maxHealth}");
+            Console.WriteLine($"Ваше здоровье: {health}/{maxHealth}");
         }
     }
-    else if (eventType == 6)
-    {
-        Console.WriteLine("Вы нашли секретный проход!");
-        Console.WriteLine("Следующая комната пропускается.");
 
-        room++;
-        continue;
+    static void ProcessTreasure(ref int potions, ref int attackBonus)
+    {
+        Console.WriteLine("Вы нашли сундук!");
+        int reward = random.Next(1, 4);
+
+        switch (reward)
+        {
+            case 1:
+                potions++;
+                Console.WriteLine($"Награда: зелье! Теперь зелий: {potions}");
+                break;
+            case 2:
+                attackBonus += 2;
+                Console.WriteLine($"Награда: золото! Бонус к атаке: +2 (всего +{attackBonus})");
+                break;
+            default:
+                attackBonus += 4;
+                Console.WriteLine($"Награда: древний артефакт! Бонус к атаке: +4 (всего +{attackBonus})");
+                break;
+        }
     }
-    else
+
+    static void ProcessRest(ref int health, int maxHealth)
     {
-        Console.WriteLine("Комната пуста. Можно идти дальше.");
+        Console.WriteLine("Вы нашли безопасное место для отдыха.");
+        int before = health;
+        health = RestoreHealth(health, maxHealth, 20);
+        Console.WriteLine($"Восстановлено {health - before} здоровья.");
+        Console.WriteLine($"Ваше здоровье: {health}/{maxHealth}");
     }
 
-    if (!isAlive)
+    static void ProcessMerchant(ref int potions, ref int attackBonus)
     {
-        break;
+        Console.WriteLine("В комнате вас встречает торговец.");
+        int choice = ReadIntInRange(1, 3,
+            "1 — Купить зелье\n" +
+            "2 — Купить увеличение атаки\n" +
+            "3 — Уйти\n" +
+            "Ваш выбор: ");
+
+        switch (choice)
+        {
+            case 1:
+                potions++;
+                Console.WriteLine($"Вы купили зелье! Теперь зелий: {potions}");
+                break;
+            case 2:
+                attackBonus += 3;
+                Console.WriteLine($"Вы усилили атаку! Бонус к атаке: +3 (всего +{attackBonus})");
+                break;
+            default:
+                Console.WriteLine("Вы ушли от торговца.");
+                break;
+        }
     }
-}
-// Финальный босс 
-if (isAlive && !leftDungeon)
-{
-    Console.WriteLine();
-    Console.WriteLine("========================================");
-    Console.WriteLine("             ФИНАЛЬНЫЙ БОСС");
-    Console.WriteLine("========================================");
-    Console.WriteLine("В глубине подземелья появляется Хранитель Тьмы!");
 
-    string bossName = "Хранитель Тьмы";
-    int bossHealth = (int)Math.Round(150 * enemyMultiplier);
-    int bossAttack = (int)Math.Round(20 * enemyMultiplier);
-    bool hasEscaped = false;
-
-    Console.WriteLine($"HP: {bossHealth}");
-    Console.WriteLine($"Атака: {bossAttack}");
-
-    while (isAlive && bossHealth > 0 && !hasEscaped)
+    // ============================================================
+    //                    БОЕВАЯ СИСТЕМА
+    // ============================================================
+    // Возвращает true, если игрок победил; false - если проиграл или сбежал
+    static bool StartBattle(string playerName, int attack, int defense,
+                            ref int health, int maxHealth,
+                            ref int potions, ref int potionsUsed,
+                            ref int damageDealt, ref int damageTaken,
+                            string enemyName, int enemyHealth, int enemyAttack)
     {
-        Console.WriteLine();
-        Console.WriteLine($"{name}: {health}/{maxHealth} HP");
-        Console.WriteLine($"{bossName}: {bossHealth} HP");
-        Console.WriteLine($"Зелья: {potions}");
-
-        int action;
-        do
+        while (health > 0 && enemyHealth > 0)
         {
             Console.WriteLine();
-            Console.WriteLine("1 — Атаковать");
-            Console.WriteLine("2 — Использовать зелье");
-            Console.WriteLine("3 — Защищаться");
-            Console.WriteLine("4 — Сбежать");
-            Console.Write("Ваш выбор: ");
+            Console.WriteLine($"Ваше здоровье: {health} / {maxHealth}");
+            Console.WriteLine($"{enemyName}: {enemyHealth} HP");
+            Console.WriteLine($"Зелий: {potions}");
 
-            string input = Console.ReadLine();
+            bool escaped = PlayerTurn(playerName, attack, defense,
+                                      ref health, maxHealth,
+                                      ref potions, ref potionsUsed,
+                                      ref damageDealt,
+                                      enemyName, ref enemyHealth,
+                                      out bool defended);
 
-            if (!int.TryParse(input, out action))
-            {
-                action = 0;
-                Console.WriteLine("Введите число от 1 до 4.");
-            }
-            else if (action < 1 || action > 4)
-            {
-                Console.WriteLine("Такого действия нет.");
-            }
-        } while (action < 1 || action > 4);
+            if (escaped)
+                return false;
 
-        bool isDefending = false;
+            if (enemyHealth <= 0)
+                return true;
+
+            if (EnemyTurn(enemyName, enemyAttack, defense, defended,
+                          ref health, maxHealth, ref damageTaken))
+                return false;
+        }
+
+        return enemyHealth <= 0 && health > 0;
+    }
+
+    // Возвращает true, если игрок сбежал.
+    // out defended - защищался ли игрок в этот ход.
+    static bool PlayerTurn(string playerName, int attack, int defense,
+                           ref int health, int maxHealth,
+                           ref int potions, ref int potionsUsed,
+                           ref int damageDealt,
+                           string enemyName, ref int enemyHealth,
+                           out bool defended)
+    {
+        defended = false;
+
+        int action = ReadIntInRange(1, 4,
+            "1 — Атаковать\n" +
+            "2 — Использовать зелье\n" +
+            "3 — Защищаться\n" +
+            "4 — Сбежать\n" +
+            "Ваш выбор: ");
 
         switch (action)
         {
             case 1:
-                int actualDamage = attack;
-                bool isCritical = random.Next(1, 101) <= 20;
+            {
+                int dmg = attack;
 
-                if (isCritical)
+                if (random.Next(1, 101) <= 20)
                 {
-                    actualDamage *= 2;
+                    dmg *= 2;
                     Console.WriteLine("КРИТИЧЕСКИЙ УДАР!");
                 }
 
-                if (actualDamage > bossHealth)
-                {
-                    actualDamage = bossHealth;
-                }
+                if (dmg > enemyHealth)
+                    dmg = enemyHealth;
 
-                bossHealth -= actualDamage;
-                damageDealt += actualDamage;
-                Console.WriteLine($"Вы наносите {actualDamage} урона!");
+                enemyHealth -= dmg;
+                damageDealt += dmg;
 
-                if (bossHealth == 0)
-                {
-                    Console.WriteLine($"{bossName} повержен!");
-                }
-                break;
+                Console.WriteLine($"Вы наносите {dmg} урона!");
+
+                if (enemyHealth == 0)
+                    Console.WriteLine($"{enemyName} повержен!");
+
+                return false;
+            }
 
             case 2:
                 if (potions <= 0)
@@ -491,113 +550,91 @@ if (isAlive && !leftDungeon)
                 }
                 else
                 {
-                    int oldHealth = health;
-                    health += 30;
-                    if (health > maxHealth)
-                    {
-                        health = maxHealth;
-                    }
-
+                    int before = health;
+                    health = RestoreHealth(health, maxHealth, 30);
                     potions--;
                     potionsUsed++;
-                    Console.WriteLine($"Вы восстановили {health - oldHealth} здоровья.");
-                    Console.WriteLine($"Зелий осталось: {potions}");
+                    Console.WriteLine("Вы использовали зелье!");
+                    Console.WriteLine($"Восстановлено {health - before} здоровья.");
+                    Console.WriteLine($"Здоровье: {health}/{maxHealth}");
                 }
-                break;
+                return false;
 
             case 3:
-                isDefending = true;
+                defended = true;
                 Console.WriteLine("Вы приготовились защищаться!");
-                break;
+                return false;
 
-            case 4:
-                hasEscaped = true;
-                leftDungeon = true;
-                Console.WriteLine("Вы сбежали от финального босса.");
-                break;
-        }
-
-        if (bossHealth > 0 && !hasEscaped)
-        {
-            int rawDamage = bossAttack - defense;
-            if (rawDamage < 1)
-            {
-                rawDamage = 1;
-            }
-
-            if (isDefending)
-            {
-                rawDamage = Math.Max(1, rawDamage / 2);
-                Console.WriteLine("Защита уменьшила полученный урон!");
-            }
-
-            damageTaken += rawDamage;
-            health -= rawDamage;
-
-            if (health < 0)
-            {
-                health = 0;
-            }
-
-            Console.WriteLine($"{bossName} атакует! Вы получаете {rawDamage} урона.");
-            Console.WriteLine($"Ваше здоровье: {health}/{maxHealth}");
-
-            if (health == 0)
-            {
-                isAlive = false;
-                Console.WriteLine("Ваш персонаж погиб!");
-            }
+            default: // 4 — сбежать
+                Console.WriteLine("Вы сбежали от противника.");
+                return true;
         }
     }
-    if (isAlive && bossHealth <= 0)
+
+    // Возвращает true, если игрок погиб.
+    static bool EnemyTurn(string enemyName, int enemyAttack, int playerDefense,
+                          bool playerDefended,
+                          ref int health, int maxHealth,
+                          ref int damageTaken)
     {
-       Console.WriteLine();
-       Console.WriteLine("========================================");
-       Console.WriteLine("                ПОБЕДА!");
-       Console.WriteLine("========================================");
-       Console.WriteLine("Вы победили Хранителя Тьмы");
-       Console.WriteLine("и выбрались из подземелья.");
-       Console.WriteLine("Поздравляем!");
+        int rawDamage = CalculateDamage(enemyAttack, playerDefense);
+
+        if (playerDefended)
+        {
+            rawDamage = Math.Max(1, rawDamage / 2);
+            Console.WriteLine("Защита уменьшила полученный урон!");
+        }
+
+        damageTaken += rawDamage;
+        health -= rawDamage;
+
+        if (health < 0)
+            health = 0;
+
+        Console.WriteLine($"{enemyName} атакует! Вы получаете {rawDamage} урона.");
+        Console.WriteLine($"Ваше здоровье: {health}/{maxHealth}");
+
+        if (health == 0)
+        {
+            Console.WriteLine("Ваш персонаж погиб!");
+            return true;
+        }
+
+        return false;
+    }
+
+    // ============================================================
+    //                    СТАТИСТИКА И ЗАВЕРШЕНИЕ
+    // ============================================================
+    static void ShowStatistics(int roomsPassed, int defeatedEnemies,
+                               int potionsUsed, int damageDealt, int damageTaken)
+    {
+        Console.WriteLine();
+        Console.WriteLine("========================================");
+        Console.WriteLine("       СТАТИСТИКА ПРИКЛЮЧЕНИЯ");
+        Console.WriteLine("========================================");
+        Console.WriteLine($"Пройдено комнат: {roomsPassed}");
+        Console.WriteLine($"Побеждено врагов: {defeatedEnemies}");
+        Console.WriteLine($"Использовано зелий: {potionsUsed}");
+        Console.WriteLine($"Нанесено урона: {damageDealt}");
+        Console.WriteLine($"Получено урона: {damageTaken}");
+        Console.WriteLine("========================================");
+    }
+
+    static void FinishGame(bool isAlive, bool leftDungeon)
+    {
+        if (!isAlive)
+        {
+            Console.WriteLine();
+            Console.WriteLine("========================================");
+            Console.WriteLine("              ПОРАЖЕНИЕ");
+            Console.WriteLine("========================================");
+            Console.WriteLine("Ваш персонаж погиб.");
+            Console.WriteLine("Подземелье оказалось слишком опасным.");
+        }
+        else
+        {
+            Console.WriteLine("Игра завершена.");
+        }
     }
 }
-if (!isAlive)
-{
-    Console.WriteLine();
-    Console.WriteLine("========================================");
-    Console.WriteLine("              ПОРАЖЕНИЕ");
-    Console.WriteLine("========================================");
-    Console.WriteLine("Ваш персонаж погиб.");
-    Console.WriteLine("Подземелье оказалось слишком опасным.");
-}
-else if (leftDungeon)
-{
-    Console.WriteLine("Игра завершена.");
-}
-
-// Итоговая статистика
-Console.WriteLine();
-Console.WriteLine("========================================");
-Console.WriteLine("       СТАТИСТИКА ПРИКЛЮЧЕНИЯ");
-Console.WriteLine("========================================");
-Console.WriteLine($"Пройдено комнат: {roomsPassed}");
-Console.WriteLine($"Побеждено врагов: {defeatedEnemies}");
-Console.WriteLine($"Использовано зелий: {potionsUsed}");
-Console.WriteLine($"Нанесено урона: {damageDealt}");
-Console.WriteLine($"Получено урона: {damageTaken}");
-Console.WriteLine("========================================");
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
